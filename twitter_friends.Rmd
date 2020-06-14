@@ -1,0 +1,386 @@
+---
+title: "Geographic variations in Dunbar's number across Europe"
+author: "Pierre Winter"
+output: rmarkdown::github_document
+---
+
+This work is motivated by the theory behind Dunbar's number and social data science. The research question is:
+Are there statistically significant differences between Dunbar's number in Western and Central Europe?
+
+The hypothesis is that these two geographical regions will have statistically significant differences in the number of friends in their close social group and therefore different Dunbar numbers. In order to answer this research question, it is important to first define sepcifically which countries make up Western and Central Europe.
+
+Western:
+France, Spain, Portugal, Italy
+
+Central:
+Germany, Netherlands, Austria, Denmark
+
+It is also important to define how this question can be answered and with which data. The approach used in this work is to acquire tweet data using the Twitter API and to aggregate, clean, and process the data using statistical methods in R.
+
+
+
+Load relevant libraries
+```{r}
+library(rtweet)
+library(dplyr)
+#library(zoo)
+#library(syuzhet)
+#library(pROC)
+#library(devtools)
+#library(sentimentSetsR)
+```
+
+
+Connect to the Twitter API using credentials
+```{r auth}
+## authenticate via web browser
+token <- get_token()
+```
+
+
+Call the search_tweets function of rtweet to get recent tweet data. The use of lookup_coords additionally requires a Google Maps API.
+```{r}
+tw_fr <- search_tweets(n=200, geocode = lookup_coords(address='paris'))
+```
+```{r}
+tw_sp <- search_tweets(n=200, geocode = lookup_coords(address='madrid'))
+```
+```{r}
+tw_po <- search_tweets(n=200, geocode = lookup_coords(address='lisbon'))
+```
+```{r}
+tw_it <- search_tweets(n=200, geocode = lookup_coords(address='rome'))
+```
+
+```{r}
+tw_ge <- search_tweets(n=200, geocode = lookup_coords(address='berlin'))
+```
+```{r}
+tw_nd <- search_tweets(n=200, geocode = lookup_coords(address='amsterdam'))
+```
+```{r}
+tw_au <- search_tweets(n=200, geocode = lookup_coords(address='vienna'))
+```
+```{r}
+tw_dk <- search_tweets(n=200, geocode = lookup_coords(address='copenhagen'))
+```
+
+Let's concatenate the tweets we found into western and central europe dataframes
+```{r}
+west_df <- do.call("rbind", list(tw_fr, tw_sp, tw_po, tw_it))
+cent_df <- do.call("rbind", list(tw_ge, tw_nd, tw_au, tw_dk))
+```
+
+
+For each dataframe, we want to ignore users who have a protected account (for privacy concerns). We then extract all the unique users we found in western and central europe and then take a random sample of 200 users each.
+```{r}
+west_df %>%
+  filter(protected==FALSE) %>%
+    distinct(user_id) -> west_users
+
+if (nrow(west_users)>200)
+{
+  west_users %>% sample_n(200) -> west_users
+}
+```
+
+```{r}
+cent_df %>%
+  filter(protected==FALSE) %>%
+    distinct(user_id) -> cent_users
+
+if (nrow(cent_users)>200)
+{
+  cent_users %>% sample_n(200) -> cent_users
+}
+```
+
+
+Get timeline of user1 then find users that are mentioned the most (possible friends)
+```{r}
+#user1 <- get_timeline(west_users$user_id[1], n=200)
+#possible_friends1 <- user1$mentions_user_id[!is.na(user1$mentions_user_id)]
+# west_users2 <- transform(west_users, n_friends = count(get_friends(west_users$user_id, retryonratelimit = TRUE)))
+```
+
+
+Given a Twitter user ID, return the number of people who reciprocate mentions above a threshold (number of friends).
+```{r}
+find_n_friends <- function(user_id, thresh) {
+  
+  user1 <- get_timeline(user_id, n=100, check=TRUE, token = token, protected=FALSE, retryonratelimit=TRUE)
+  possible_friends1 <- user1$mentions_user_id[!is.na(user1$mentions_user_id)]
+  unique1 <- c(unlist(possible_friends1))
+  numeric_unique1 <- as.numeric(unique1)
+  unique_counts <- as.data.frame(table(numeric_unique1))
+  top_mentions <- as.data.frame(unique_counts$numeric_unique1[unique_counts$Freq >= thresh])
+  
+  if(length(top_mentions) == 0) {
+    return(0)
+  }
+  
+  n_friends = 0
+  for (possible_friend2 in top_mentions) {
+      user2 <- get_timeline(possible_friend2, n=100, check=TRUE, token = token, protected=FALSE, retryonratelimit=TRUE)
+      possible_friends2 <- user2$mentions_user_id[!is.na(user2$mentions_user_id)]
+      unique2 <- c(unlist(possible_friends2))
+      numeric_unique2 <- as.numeric(unique2)
+      unique_counts2 <- as.data.frame(table(numeric_unique2))
+      
+    if (user_id %in% unique_counts2$numeric_unique){
+      
+      recips <- min(unique_counts$Freq[unique_counts$numeric_unique==possible_friend2], unique_counts2$Freq[unique_counts2$numeric_unique==user_id])
+      n_friends <- n_friends + recips
+    }
+  }
+  return(n_friends)
+}
+```
+
+Test
+```{r}
+#find_n_friends(west_users$user_id[5], thresh=2)
+find_n_friends(439243467, thresh=2)
+```
+
+
+Find number of friends for the 200 west_users.
+```{r}
+west_friends50 <- west_users[1:50,]
+west_friends100 <- west_users[51:100,]
+west_friends150 <- west_users[101:150,]
+west_friends200 <- west_users[151:200,]
+```
+
+
+```{r}
+friend_threshold = 2
+```
+
+```{r}
+west_friends50$n_friends <- sapply(west_friends50$user_id, find_n_friends, thresh=friend_threshold)
+save(west_friends50, file="west_friends50.RData")
+```
+
+```{r}
+west_friends100$n_friends <- sapply(west_friends100$user_id, find_n_friends, thresh=friend_threshold)
+save(west_friends100, file="west_friends100.RData")
+```
+
+```{r}
+west_friends150$n_friends <- sapply(west_friends150$user_id, find_n_friends, thresh=friend_threshold)
+save(west_friends150, file="west_friends150.RData")
+```
+
+```{r}
+west_friends200$n_friends <- sapply(west_friends200$user_id, find_n_friends, thresh=friend_threshold)
+save(west_friends200, file="west_friends200.RData")
+```
+
+
+
+Now find the number of friends for the 200 cent_users.
+```{r}
+cent_friends50 <- cent_users[1:50,]
+cent_friends100 <- cent_users[51:100,]
+cent_friends150 <- cent_users[101:150,]
+cent_friends200 <- cent_users[151:200,]
+```
+
+
+```{r}
+cent_friends50$n_friends <- sapply(cent_friends50$user_id, find_n_friends, thresh=friend_threshold)
+save(cent_friends50, file="cent_friends50.RData")
+```
+
+```{r}
+cent_friends100$n_friends <- sapply(cent_friends100$user_id, find_n_friends, thresh=friend_threshold)
+save(cent_friends100, file="cent_friends100.RData")
+```
+
+```{r}
+cent_friends150$n_friends <- sapply(cent_friends150$user_id, find_n_friends, thresh=friend_threshold)
+save(cent_friends150, file="cent_friends150.RData")
+```
+
+```{r}
+cent_friends200$n_friends <- sapply(cent_friends200$user_id, find_n_friends, thresh=friend_threshold)
+save(cent_friends200, file="cent_friends200.RData")
+```
+
+
+
+
+Combine the subsets together
+```{r}
+west_friends <- rbind(west_friends50, west_friends100, west_friends150, west_friends200)
+#save(west_friends, file=paste("west_friends_thresh", friend_threshold, ".RData", sep=""))
+```
+
+```{r}
+cent_friends <- rbind(cent_friends50, cent_friends100, cent_friends150, cent_friends200)
+#save(cent_friends, file=paste("cent_friends_thresh", friend_threshold, ".RData", sep=""))
+```
+
+IF LOADING IN A PRE-SAVED DATASET (where number of friends has already been calculated), START HERE FOR ANALYSIS!
+```{r}
+#load dataset here
+load('west_friends_thresh2.RData')
+load('cent_friends_thresh2.RData')
+```
+
+
+
+Make histograms for each population
+```{r}
+#png(file = "west_friends_histogram_thresh", friend_threshold, ".png", sep="")
+hist(west_friends$n_friends, breaks=30, main = "Number of Twitter Friends in Western Europe", xlab = "Number of Friends", col = "blue", border = "black")
+#dev.off()
+```
+
+```{r}
+#png(file = "cent_friends_histogram_thresh", friend_threshold, ".png", sep="")
+hist(cent_friends$n_friends, breaks=30, main = "Number of Twitter Friends in Central Europe", xlab = "Number of Friends", col = "blue", border = "black")
+#dev.off()
+```
+
+These histograms show that the count of the number of friends data is skewed for both populations. We will therefore analyze the log(n_friends) from here on so that our distributions are closer to normal distributions.
+
+```{r}
+west_friends$log_n_friends <- log(west_friends$n_friends+1)
+cent_friends$log_n_friends <- log(cent_friends$n_friends+1)
+
+west_friends$region <- "west"
+cent_friends$region <- "cent"
+```
+
+
+```{r}
+#png(file=paste("log_west_friends_histogram_thresh", friend_threshold, ".png", sep=""))
+hist(west_friends$log_n_friends, main = "Log of Number of Twitter Friends in Western Europe", xlab = "Log of Number of Friends", col = "blue", border = "black")
+#dev.off()
+```
+
+```{r}
+#png(file=paste("log_cent_friends_histogram_thresh", friend_threshold, ".png", sep=""))
+hist(cent_friends$log_n_friends, main = "Log of Number of Twitter Friends in Central Europe", xlab = "Log of Number of Friends", col = "blue", border = "black")
+#dev.off()
+```
+
+The distribution of the number of friends is still very skewed due to the high number of results which gave zero friends. The data (even after log transform) is therefore not normally distributed, but the variance is assumed to be roughly the same across the two populations.
+
+
+
+We want to find if the results from these two populations are statistically different. We will run an independent two-sample t-test (defined using the difference in means) and use this as the test statistic.
+
+```{r}
+full_t <- t.test(west_friends$log_n_friends, cent_friends$log_n_friends)
+full_t
+```
+
+```{r}
+pts = seq(-6,6,length=100)
+#png(file=paste("ttest_thresh", friend_threshold, ".png", sep=""))
+plot(pts,dt(pts,df=398),col='black',type='l',ylim=c(0,0.65), main = "t-Test for the Difference in Means", xlab = "t-Statistic", ylab = "Probability Distribution")
+abline(v=full_t$statistic, col="red")
+```
+
+
+Calculate the two-sided p-value for the t-statistic between our two populations. This is equal to the area under the black curve that is to the left of the red vertical line.
+```{r}
+p_value <- full_t$p.value
+p_value
+```
+
+
+
+The t-test isnt really valid for such non-normal distributions so instead we can try a permutation test in which we randomly permute the number of friends between Western and Central Europe. We will permute 10,000 times and use 2 different test statistics: difference in mean and difference in median
+
+```{r}
+# combine the two populations so that we can easily sample/permute them 10,000 times
+combined_friends <- rbind(west_friends, cent_friends)
+set.seed(1991)
+n <- length(combined_friends$log_n_friends) #400 data points
+P <- 10000
+variable <- combined_friends$log_n_friends
+```
+
+
+```{r}
+# calculate original means and their difference
+mean(combined_friends$log_n_friends[combined_friends$region=="west"])
+mean(combined_friends$log_n_friends[combined_friends$region=="cent"])
+
+test.stat1 <- abs(mean(combined_friends$log_n_friends[combined_friends$region=="west"]) - mean(combined_friends$log_n_friends[combined_friends$region=="cent"]))
+
+test.stat1
+```
+
+```{r}
+# calculate original medians and their difference
+median(combined_friends$log_n_friends[combined_friends$region=="west"])
+median(combined_friends$log_n_friends[combined_friends$region=="cent"])
+
+test.stat2 <- abs(median(combined_friends$log_n_friends[combined_friends$region=="west"]) - median(combined_friends$log_n_friends[combined_friends$region=="cent"]))
+
+test.stat2
+```
+
+
+```{r}
+# create permuted columns that we can sample over
+PermSamples <- matrix(0, nrow=n, ncol=P)
+
+for(i in 1:P){
+  PermSamples[,i] <- sample(variable, size=n, replace=FALSE)
+}
+```
+
+```{r}
+# calculate mean and median difference for each permuted sample (for each column)
+Perm.test.stat1 <- Perm.test.stat2 <- rep(0, P)
+for (i in 1:P){
+  Perm.test.stat1[i] <- abs( mean(PermSamples[combined_friends$region=="west",i]) -
+                               mean(PermSamples[combined_friends$region=="cent",i]) )
+
+  Perm.test.stat2[i] <- abs( median(PermSamples[combined_friends$region=="west",i]) -
+                               median(PermSamples[combined_friends$region=="cent",i]) )
+}
+```
+
+
+```{r}
+#png(file=paste("ptest_mean_thresh_", friend_threshold, ".png", sep=""))
+hist(Perm.test.stat1, main="Permutation Test for Difference in Means", xlab="Difference in Means")
+abline(v=test.stat1, col="red")
+```
+
+```{r}
+#png(file=paste("ptest_median_thresh_", friend_threshold, ".png", sep=""))
+hist(Perm.test.stat2, main="Permutation Test for Difference in Medians", xlab="Difference in Medians")
+abline(v=test.stat2, col="red")
+```
+
+
+```{r}
+# calculate the p-values for each test statistic
+(sum(Perm.test.stat1 >= test.stat1))/length(Perm.test.stat1)
+
+(sum(Perm.test.stat2 >= test.stat2))/length(Perm.test.stat2)
+```
+
+
+We have run 3 different tests to see if the 2 sample populations have a statistically significant difference in their number of friends on Twitter:
+
+1) Welch two-sample t-test - Suggests that the difference in the number of friends on Twitter is significant and that users in Central Europe have more friends than those in Western Europe. The distribution is highly skewed, however, and this is not a valid statistical test.
+
+2) Permutation test using difference in means - Suggests that the difference in the number of friends on Twitter is significant and that users in Central Europe have more friends than those in Western Europe. This is a more rigorous test with 10,000 permutations across the 400 samples.
+
+3) Permutation test using difference in medians - Suggests that the difference in the number of friends on Twitter is not significant between the two regions in Europe. This is a more rigorous test with 10,000 permutations across the 400 samples.
+
+
+It is difficult to come to a final conclusion if the null hypothesis is confirmed or rejected, mostly due to the highly skewed data with most users having zero friends as measured by this approach. This approach also predicts a number of friends much less than Dunbar's number, which is expected possibly due to the lower popularity of Twitter in Europe.
+
+
+
+
