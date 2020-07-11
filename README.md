@@ -2,7 +2,7 @@
 
 The average number of friends that a person can maintain strong relationships with has been determined to be 150 or less (Dunbar's number). The size of friend groups may also vary among different countries and cultures. Can geographical differences in the number of friends be quantified using social media data?
 
-### Project Overview
+### Project Overview :eyes:
 
 This is a personal project based on my interest in social data science and understanding how sociology impacts human relationships. I made use of open-source software such as R and rtweet to obtain public Twitter data and I performed data aggregation and visualization in RStudio. Twitter API access is required!
 
@@ -12,9 +12,9 @@ My solution was to obtain geogrpahical Twitter timeline data using the rtweet pa
 
 Because the data is heavily skewed, I performed a permutation test to compare the two European populations and it was found that they exhibit a statistically significant difference in their average number of friends.
 
-### TO-DO List
+### TO-DO List :hatching_chick:
 
-This is an ongoing project and I expect to add more functionality soon. :hatching_chick:
+This is an ongoing project and I expect to add more functionality soon.
 
 - [ ] Update friends function to include sentiment analysis
 - [ ] Include more countries/cities to draw data from
